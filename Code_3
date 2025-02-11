@@ -1,0 +1,238 @@
+class Note {
+  final int? id;
+  final String title;
+  final String content;
+
+  Note({
+    this.id,
+    required this.title,
+    required this.content,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+    };
+  }
+
+  factory Note.fromMap(Map<String, dynamic> map) {
+    return Note(
+      id: map['id'],
+      title: map['title'],
+      content: map['content'],
+    );
+  }
+}
+
+
+
+
+
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'note.dart';
+
+class DatabaseHelper {
+  static final DatabaseHelper instance = DatabaseHelper._init();
+
+  static Database? _database;
+
+  DatabaseHelper._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+
+    _database = await _initDB('notes.db');
+    return _database!;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: _createDB,
+    );
+  }
+
+  Future _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<int> create(Note note) async {
+    final db = await instance.database;
+
+    return await db.insert('notes', note.toMap());
+  }
+
+  Future<List<Note>> readAllNotes() async {
+    final db = await instance.database;
+
+    final result = await db.query('notes');
+
+    return result.map((map) => Note.fromMap(map)).toList();
+  }
+
+  Future<int> update(Note note) async {
+    final db = await instance.database;
+
+    return await db.update(
+      'notes',
+      note.toMap(),
+      where: 'id = ?',
+      whereArgs: [note.id],
+    );
+  }
+
+  Future<int> delete(int id) async {
+    final db = await instance.database;
+
+    return await db.delete(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+}
+
+
+
+
+
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'note.dart';
+import 'database_helper.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Note Taking App',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: NotesPage(),
+    );
+  }
+}
+
+class NotesPage extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    final notes = useState<List<Note>>([]);
+
+    useEffect(() {
+      _loadNotes();
+      return null;
+    }, []);
+
+    Future<void> _loadNotes() async {
+      final data = await DatabaseHelper.instance.readAllNotes();
+      notes.value = data;
+    }
+
+    Future<void> _createNote() async {
+      final newNote = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => NoteEditor(),
+        ),
+      );
+      if (newNote != null) {
+        await DatabaseHelper.instance.create(newNote);
+        _loadNotes();
+      }
+    }
+
+    Future<void> _deleteNote(int id) async {
+      await DatabaseHelper.instance.delete(id);
+      _loadNotes();
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Notes'),
+      ),
+      body: ListView.builder(
+        itemCount: notes.value.length,
+        itemBuilder: (context, index) {
+          final note = notes.value[index];
+          return ListTile(
+            title: Text(note.title),
+            subtitle: Text(note.content),
+            trailing: IconButton(
+              icon: Icon(Icons.delete),
+              onPressed: () => _deleteNote(note.id!),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _createNote,
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class NoteEditor extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    final titleController = useTextEditingController();
+    final contentController = useTextEditingController();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('New Note'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: contentController,
+              decoration: InputDecoration(labelText: 'Content'),
+            ),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                final newNote = Note(
+                  title: titleController.text,
+                  content: contentController.text,
+                );
+                Navigator.of(context).pop(newNote);
+              },
+              child: Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+
+
+
+
+
+
