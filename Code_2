@@ -1,0 +1,116 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter To-Do List',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: ToDoListPage(),
+    );
+  }
+}
+
+class ToDoListPage extends HookWidget {
+  @override
+  Widget build(BuildContext context) {
+    final tasks = useState<List<Task>>([]);
+    final newTaskController = useTextEditingController();
+
+    void addTask(String title) {
+      final task = Task(title: title, isCompleted: false);
+      tasks.value = [...tasks.value, task];
+    }
+
+    void deleteTask(int index) {
+      tasks.value = [
+        for (int i = 0; i < tasks.value.length; i++)
+          if (i != index) tasks.value[i],
+      ];
+    }
+
+    void toggleTaskCompletion(int index) {
+      tasks.value = [
+        for (int i = 0; i < tasks.value.length; i++)
+          if (i == index)
+            Task(title: tasks.value[i].title, isCompleted: !tasks.value[i].isCompleted)
+          else
+            tasks.value[i],
+      ];
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Flutter To-Do List'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: newTaskController,
+                    decoration: InputDecoration(
+                      labelText: 'New Task',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.add),
+                  onPressed: () {
+                    if (newTaskController.text.isNotEmpty) {
+                      addTask(newTaskController.text);
+                      newTaskController.clear();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: tasks.value.length,
+              itemBuilder: (context, index) {
+                final task = tasks.value[index];
+                return ListTile(
+                  title: Text(
+                    task.title,
+                    style: TextStyle(
+                      decoration: task.isCompleted
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
+                    ),
+                  ),
+                  leading: Checkbox(
+                    value: task.isCompleted,
+                    onChanged: (_) => toggleTaskCompletion(index),
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete),
+                    onPressed: () => deleteTask(index),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class Task {
+  final String title;
+  final bool isCompleted;
+
+  Task({required this.title, required this.isCompleted});
+}
